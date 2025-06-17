@@ -44,8 +44,15 @@ def main():
                 private_repos = []
                 public_repos = []
                 
+                # FIXED: Fetch ALL repositories including private ones
+                if is_org:
+                    repos = target.get_repos(affiliation="owner", visibility="all")
+                else:
+                    # For user accounts, use the current authenticated user
+                    repos = current_user.get_repos(affiliation="owner", visibility="all")
+                
                 # Fetch and categorize repositories
-                for repo in target.get_repos():
+                for repo in repos:
                     if repo.private:
                         private_repos.append(repo)
                     else:
