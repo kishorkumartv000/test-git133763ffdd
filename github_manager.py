@@ -143,15 +143,28 @@ def main():
                 repo = target.get_repo(repo_name)
                 enabled = actions_enabled.lower() == "true"
                 
-                # Update actions enabled status
-                repo.edit(actions_enabled=enabled)
+                # Use the correct API endpoint to enable/disable actions
+                url = f"https://api.github.com/repos/{repo.owner.login}/{repo.name}/actions/permissions"
+                headers = {
+                    "Authorization": f"token {token}",
+                    "Accept": "application/vnd.github.v3+json"
+                }
+                data = {"enabled": enabled}
                 
-                status = "🟢 ENABLED" if enabled else "🔴 DISABLED"
-                print(f"✅ GitHub Actions: {status}")
-                print(f"   - Repository: {repo_name}")
+                response = requests.put(url, headers=headers, json=data)
+                
+                if response.status_code == 204:
+                    status = "🟢 ENABLED" if enabled else "🔴 DISABLED"
+                    print(f"✅ GitHub Actions: {status}")
+                    print(f"   - Repository: {repo_name}")
+                else:
+                    print(f"❌ Failed to set Actions permissions (HTTP {response.status_code})")
+                    print(f"   - {response.json().get('message', 'Unknown error')}")
                 
             except GithubException as e:
                 print(f"❌ Error setting Actions permissions: {e.data.get('message', str(e))}")
+            except Exception as e:
+                print(f"❌ Unexpected error: {str(e)}")
                 
         elif operation == "run_workflow" and repo_name:
             try:
