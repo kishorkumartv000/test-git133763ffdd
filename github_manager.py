@@ -1,7 +1,7 @@
 import os
 import requests
 import tempfile
-from github import Github, GithubException, InputGitAuthor
+from github import Github, GithubException
 
 def main():
     # Load configuration
@@ -12,6 +12,9 @@ def main():
     tag_name = os.getenv('TAG_NAME')
     release_title = os.getenv('RELEASE_TITLE')
     asset_url = os.getenv('ASSET_URL')
+    actions_enabled = os.getenv('ACTIONS_ENABLED')
+    allow_all_actions = os.getenv('ALLOW_ALL_ACTIONS')
+    allow_reusable_workflows = os.getenv('ALLOW_REUSABLE_WORKFLOWS')
     
     # Validate inputs
     if not token:
@@ -113,18 +116,64 @@ def main():
             except GithubException as e:
                 print(f"❌ Error creating release: {e.data.get('message', str(e))}")
                 
+        elif operation == "set_actions_permissions" and repo_name:
+            try:
+                repo = target.get_repo(repo_name)
+                current = repo.get_actions_permissions()
+                
+                # Build new permissions object
+                new_permissions = {}
+                
+                # Actions enabled/disabled
+                if actions_enabled is not None:
+                    enabled = actions_enabled.lower() == "true"
+                    new_permissions["enabled"] = enabled
+                    status = "🟢 ENABLED" if enabled else "🔴 DISABLED"
+                    print(f"Set Actions: {status}")
+                
+                # All actions configuration
+                if allow_all_actions is not None:
+                    allow_all = allow_all_actions.lower() == "true"
+                    new_permissions["allowed_actions"] = "all" if allow_all else "selected"
+                    status = "✅ ALLOWED" if allow_all else "🚫 RESTRICTED"
+                    print(f"All Actions: {status}")
+                
+                # Reusable workflows configuration
+                if allow_reusable_workflows is not None:
+                    allow_reusable = allow_reusable_workflows.lower() == "true"
+                    new_permissions["allowed_actions"] = "selected"  # Required for reusable workflows
+                    new_permissions["enabled_repositories"] = "all" if allow_reusable else "none"
+                    status = "✅ ALLOWED" if allow_reusable else "🚫 BLOCKED"
+                    print(f"Reusable Workflows: {status}")
+                
+                # Update permissions if we have changes
+                if new_permissions:
+                    repo.edit(**new_permissions)
+                    print(f"✅ Updated Actions permissions for {repo_name}")
+                else:
+                    print("⚠️ No changes specified for Actions permissions")
+                    
+                # Print current settings
+                updated = repo.get_actions_permissions()
+                print("\nCurrent Actions Settings:")
+                print(f"- Enabled: {'🟢 YES' if updated.enabled else '🔴 NO'}")
+                print(f"- All Actions: {'✅ ALLOWED' if updated.allowed_actions == 'all' else '🚫 RESTRICTED'}")
+                print(f"- Reusable Workflows: {'✅ ALLOWED' if updated.enabled_repositories == 'all' else '🚫 BLOCKED'}")
+                
+            except GithubException as e:
+                print(f"❌ Error setting Actions permissions: {e.data.get('message', str(e))}")
+                
         else:
             supported_ops = [
                 "list_repos", 
                 "create_repo", 
                 "delete_repo",
                 "toggle_visibility",
-                "create_release"
+                "create_release",
+                "set_actions_permissions"
             ]
             print(f"❌ Unsupported operation: {operation}")
             print(f"   Supported operations: {', '.join(supported_ops)}")
-            if operation == "create_release":
-                print("   Required parameters for create_release: repo_name, tag_name, release_title")
             
     except GithubException as e:
         print(f"⚠️ GitHub API error: {e.data.get('message', str(e))}")
