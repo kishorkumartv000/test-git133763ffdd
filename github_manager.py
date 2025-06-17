@@ -2,7 +2,7 @@ import os
 import requests
 import tempfile
 import time
-from github import Github, GithubException, WorkflowRun
+from github import Github, GithubException
 
 def main():
     # Load configuration
@@ -24,13 +24,16 @@ def main():
         raise ValueError("Missing TARGET_ACCOUNT")
     
     g = Github(token)
+    current_user = g.get_user()  # Get authenticated user
     
     try:
         # Get target user/org
         try:
             target = g.get_organization(target_account)
+            is_org = True
         except GithubException:
             target = g.get_user(target_account)
+            is_org = False
         
         # Perform operations
         if operation == "list_repos":
@@ -40,14 +43,34 @@ def main():
                 print(f"- {visibility}: {repo.name} (URL: {repo.html_url})")
                 
         elif operation == "create_repo" and repo_name:
-            repo = target.create_repo(
-                name=repo_name,
-                private=True,
-                auto_init=True
-            )
-            print(f"✅ Created repository: {repo.html_url}")
-            print(f"   - Visibility: {'Private' if repo.private else 'Public'}")
-            
+            try:
+                if is_org:
+                    # Create in organization
+                    repo = target.create_repo(
+                        name=repo_name,
+                        private=True,
+                        auto_init=True
+                    )
+                else:
+                    # Create in user account (must be current user)
+                    if target.login.lower() != current_user.login.lower():
+                        raise ValueError(f"Cannot create repo in another user's account: {target.login}")
+                    
+                    repo = current_user.create_repo(
+                        name=repo_name,
+                        private=True,
+                        auto_init=True
+                    )
+                
+                print(f"✅ Created repository: {repo.html_url}")
+                print(f"   - Visibility: {'Private' if repo.private else 'Public'}")
+                print(f"   - Owner: {repo.owner.login}")
+                
+            except ValueError as ve:
+                print(f"❌ {str(ve)}")
+            except GithubException as ge:
+                print(f"❌ GitHub API error: {ge.data.get('message', str(ge))}")
+                
         elif operation == "delete_repo" and repo_name:
             try:
                 repo = target.get_repo(repo_name)
