@@ -191,19 +191,28 @@ def main():
             try:
                 repo = target.get_repo(repo_name)
                 
-                # Automatically find first workflow file
+                # Get all workflows in the repository
                 workflows = list(repo.get_workflows())
                 
                 if not workflows:
                     print("❌ No workflows found in repository")
+                    print("   Please create a workflow in .github/workflows/ directory")
                     return
                 
-                # Select first active workflow
-                workflow = next((wf for wf in workflows if wf.state == "active"), None)
+                # Find active workflows
+                active_workflows = [wf for wf in workflows if wf.state == "active"]
                 
-                if not workflow:
-                    print("❌ No active workflows found")
+                if not active_workflows:
+                    # If no active workflows, show available workflows
+                    print("❌ No active workflows found. Available workflows:")
+                    for i, wf in enumerate(workflows, 1):
+                        state_emoji = "🟢" if wf.state == "active" else "🔴"
+                        print(f"   {i}. {state_emoji} {wf.name} (state: {wf.state})")
+                    print("\n💡 To activate a workflow, go to repository Actions tab")
                     return
+                
+                # Use the first active workflow
+                workflow = active_workflows[0]
                 
                 # Use repository's default branch
                 ref = repo.default_branch
@@ -215,7 +224,7 @@ def main():
                 print(f"   - Repository: {repo_name}")
                 print(f"   - Using default branch: {ref}")
                 print(f"   - Workflow file: {workflow.path}")
-                print(f"   - Workflow URL: {workflow.url}")
+                print(f"   - Workflow URL: https://github.com/{repo.full_name}/actions/workflows/{os.path.basename(workflow.path)}")
                 
                 # Monitor workflow start
                 print("\n⏳ Waiting for workflow to start...")
@@ -232,9 +241,12 @@ def main():
                     print(f"   - Run URL: {latest_run.html_url}")
                 else:
                     print("⚠️ Workflow run not detected yet")
+                    print("   Check repository Actions tab manually")
                 
             except GithubException as e:
                 print(f"❌ Error triggering workflow: {e.data.get('message', str(e))}")
+                if "Not Found" in str(e):
+                    print("   Make sure the workflow file exists in .github/workflows/")
                 
         elif operation == "cancel_workflows" and repo_name:
             try:
