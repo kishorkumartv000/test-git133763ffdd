@@ -1,6 +1,7 @@
 import os
 import requests
 import tempfile
+import time
 from github import Github, GithubException
 
 def main():
@@ -15,6 +16,8 @@ def main():
     actions_enabled = os.getenv('ACTIONS_ENABLED')
     allow_all_actions = os.getenv('ALLOW_ALL_ACTIONS')
     allow_reusable_workflows = os.getenv('ALLOW_REUSABLE_WORKFLOWS')
+    workflow_file = os.getenv('WORKFLOW_FILE')
+    ref = os.getenv('REF') or "main"
     
     # Validate inputs
     if not token:
@@ -163,6 +166,76 @@ def main():
             except GithubException as e:
                 print(f"❌ Error setting Actions permissions: {e.data.get('message', str(e))}")
                 
+        elif operation == "run_workflow" and repo_name and workflow_file:
+            try:
+                repo = target.get_repo(repo_name)
+                
+                # Get workflow by filename
+                workflow = repo.get_workflow(workflow_file)
+                
+                # Trigger workflow dispatch
+                workflow.create_dispatch(ref=ref)
+                
+                print(f"✅ Triggered workflow: {workflow_file}")
+                print(f"   - Repository: {repo_name}")
+                print(f"   - Ref: {ref}")
+                print(f"   - Workflow URL: https://github.com/{repo.full_name}/actions/workflows/{workflow_file}")
+                
+                # Monitor workflow start
+                print("\n⏳ Waiting for workflow to start...")
+                time.sleep(5)  # Wait for workflow to initialize
+                
+                # Get latest runs
+                runs = workflow.get_runs()
+                latest_run = runs[0] if runs.totalCount > 0 else None
+                
+                if latest_run and latest_run.status == "queued":
+                    print(f"   - Workflow ID: {latest_run.id}")
+                    print(f"   - Status: 🟡 QUEUED")
+                    print(f"   - Run URL: {latest_run.html_url}")
+                elif latest_run:
+                    print(f"   - Workflow ID: {latest_run.id}")
+                    print(f"   - Status: {latest_run.status.upper()}")
+                    print(f"   - Run URL: {latest_run.html_url}")
+                else:
+                    print("⚠️ Could not find triggered workflow run")
+                
+            except GithubException as e:
+                print(f"❌ Error triggering workflow: {e.data.get('message', str(e))}")
+                
+        elif operation == "cancel_workflows" and repo_name:
+            try:
+                repo = target.get_repo(repo_name)
+                
+                # Get all active workflow runs
+                runs = repo.get_workflow_runs(status="in_progress")
+                total_runs = runs.totalCount
+                
+                if total_runs == 0:
+                    print("✅ No running workflows found")
+                    return
+                
+                print(f"Found {total_runs} running workflow(s):")
+                canceled_count = 0
+                
+                for run in runs:
+                    print(f"  - Workflow: {run.name} (ID: {run.id})")
+                    print(f"    Status: {run.status} | Created: {run.created_at}")
+                    print(f"    URL: {run.html_url}")
+                    
+                    # Cancel the run
+                    try:
+                        run.cancel()
+                        print("    🛑 Cancel request sent")
+                        canceled_count += 1
+                    except GithubException as e:
+                        print(f"    ❌ Failed to cancel: {e.data.get('message', str(e))}")
+                
+                print(f"\n✅ Canceled {canceled_count}/{total_runs} running workflows")
+                
+            except GithubException as e:
+                print(f"❌ Error canceling workflows: {e.data.get('message', str(e))}")
+                
         else:
             supported_ops = [
                 "list_repos", 
@@ -170,7 +243,9 @@ def main():
                 "delete_repo",
                 "toggle_visibility",
                 "create_release",
-                "set_actions_permissions"
+                "set_actions_permissions",
+                "run_workflow",
+                "cancel_workflows"
             ]
             print(f"❌ Unsupported operation: {operation}")
             print(f"   Supported operations: {', '.join(supported_ops)}")
