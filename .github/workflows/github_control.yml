@@ -7,11 +7,11 @@ on:
         description: "Target GitHub username/org"
         required: true
       operation:
-        description: "Operation (list_repos, create_repo, delete_repo)"
+        description: "Operation (list_repos, create_repo, delete_repo, toggle_visibility)"
         required: true
         default: "list_repos"
       repo_name:
-        description: "Repository name (for create/delete)"
+        description: "Repository name (for create/delete/toggle)"
         required: false
 
 jobs:
