@@ -39,10 +39,45 @@ def main():
         
         # Perform operations
         if operation == "list_repos":
-            print(f"Repositories for {target.login}:")
-            for repo in target.get_repos():
-                visibility = "🔒 PRIVATE" if repo.private else "🌍 PUBLIC"
-                print(f"- {visibility}: {repo.name} (URL: {repo.html_url})")
+            try:
+                print(f"📂 All repositories for {target.login}:")
+                private_repos = []
+                public_repos = []
+                
+                # Fetch and categorize repositories
+                for repo in target.get_repos():
+                    if repo.private:
+                        private_repos.append(repo)
+                    else:
+                        public_repos.append(repo)
+                
+                # Print private repositories
+                if private_repos:
+                    print("\n🔒 PRIVATE REPOSITORIES:")
+                    for repo in private_repos:
+                        print(f"  - {repo.name}")
+                        print(f"    URL: {repo.html_url}")
+                        print(f"    Size: {repo.size} KB | Last updated: {repo.updated_at}")
+                        print(f"    Description: {repo.description or 'No description'}")
+                else:
+                    print("\nℹ️ No private repositories found")
+                
+                # Print public repositories
+                if public_repos:
+                    print("\n🌍 PUBLIC REPOSITORIES:")
+                    for repo in public_repos:
+                        print(f"  - {repo.name}")
+                        print(f"    URL: {repo.html_url}")
+                        print(f"    Size: {repo.size} KB | Last updated: {repo.updated_at}")
+                        print(f"    Description: {repo.description or 'No description'}")
+                else:
+                    print("\nℹ️ No public repositories found")
+                    
+                # Summary statistics
+                print(f"\n📊 Summary: {len(private_repos)} private, {len(public_repos)} public, {len(private_repos) + len(public_repos)} total repositories")
+                
+            except GithubException as e:
+                print(f"❌ Error listing repositories: {e.data.get('message', str(e))}")
                 
         elif operation == "create_repo" and repo_name:
             try:
