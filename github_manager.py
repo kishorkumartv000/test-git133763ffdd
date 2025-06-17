@@ -405,6 +405,16 @@ def main():
                                 stderr=subprocess.PIPE
                             )
                     
+                    # Get source repository's default branch
+                    print("🔍 Determining source default branch...")
+                    head_ref = subprocess.check_output(
+                        ['git', 'symbolic-ref', 'HEAD'],
+                        cwd=temp_dir,
+                        text=True
+                    ).strip()
+                    default_branch = head_ref.split('/')[-1]
+                    print(f"   - Source default branch: {default_branch}")
+                    
                     # Push to new repository
                     print(f"⬆️ Pushing to new repository: {new_repo.html_url}")
                     # Add token to URL for authentication
@@ -419,11 +429,26 @@ def main():
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE
                     )
+                    
+                    # Set default branch in the new repository
+                    print("🔄 Setting default branch...")
+                    try:
+                        new_repo.edit(default_branch=default_branch)
+                        print(f"   - Default branch set to: {default_branch}")
+                    except GithubException as e:
+                        print(f"⚠️ Could not set default branch: {e.data.get('message', str(e))}")
+                        print(f"   - Using fallback branch: main")
+                        try:
+                            # Try to set to 'main' as fallback
+                            new_repo.edit(default_branch='main')
+                        except:
+                            print("   - Could not set any default branch")
                 
                 print(f"✅ Successfully cloned repository")
                 print(f"   - Source: {source_url}")
                 print(f"   - Destination: {new_repo.html_url}")
                 print(f"   - Repository name: {repo_name}")
+                print(f"   - Default branch: {default_branch}")
                 
             except subprocess.CalledProcessError as e:
                 error_msg = e.stderr.decode().strip() if e.stderr else str(e)
