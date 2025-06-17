@@ -27,7 +27,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install PyGithub python-dotenv
+        run: pip install PyGithub
 
       - name: Run control script
         env:
