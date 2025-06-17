@@ -154,32 +154,28 @@ def main():
                     status = "🟢 ENABLED" if enabled else "🔴 DISABLED"
                     print(f"Set Actions: {status}")
                 
-                # All actions configuration
-                if allow_all_actions is not None:
-                    allow_all = allow_all_actions.lower() == "true"
-                    new_permissions["allowed_actions"] = "all" if allow_all else "selected"
-                    status = "✅ ALLOWED" if allow_all else "🚫 RESTRICTED"
-                    print(f"All Actions: {status}")
-                
-                # Reusable workflows configuration
-                if allow_reusable_workflows is not None:
-                    allow_reusable = allow_reusable_workflows.lower() == "true"
-                    # For reusable workflows, we need to set allowed_actions to "selected"
-                    if allow_reusable:
-                        new_permissions["allowed_actions"] = "selected"
-                    new_permissions["enabled_repositories"] = "all" if allow_reusable else "none"
-                    status = "✅ ALLOWED" if allow_reusable else "🚫 BLOCKED"
-                    print(f"Reusable Workflows: {status}")
+                # Only set other permissions if actions are enabled
+                if actions_enabled is None or actions_enabled.lower() == "true":
+                    # All actions configuration
+                    if allow_all_actions is not None:
+                        allow_all = allow_all_actions.lower() == "true"
+                        new_permissions["allowed_actions"] = "all" if allow_all else "selected"
+                        status = "✅ ALLOWED" if allow_all else "🚫 RESTRICTED"
+                        print(f"All Actions: {status}")
+                    
+                    # Reusable workflows configuration
+                    if allow_reusable_workflows is not None:
+                        allow_reusable = allow_reusable_workflows.lower() == "true"
+                        # For reusable workflows, we need to set allowed_actions to "selected"
+                        if allow_reusable:
+                            new_permissions["allowed_actions"] = "selected"
+                        new_permissions["enabled_repositories"] = "all" if allow_reusable else "none"
+                        status = "✅ ALLOWED" if allow_reusable else "🚫 BLOCKED"
+                        print(f"Reusable Workflows: {status}")
                 
                 # Update permissions if we have changes
                 if new_permissions:
-                    # For reusable workflows, we need to set allowed_actions first
-                    if "allowed_actions" in new_permissions:
-                        repo.edit(allowed_actions=new_permissions["allowed_actions"])
-                    
-                    # Edit other parameters
-                    repo.edit(**{k: v for k, v in new_permissions.items() if k != "allowed_actions"})
-                    
+                    repo.edit(**new_permissions)
                     print(f"✅ Updated Actions permissions for {repo_name}")
                 else:
                     print("⚠️ No changes specified for Actions permissions")
