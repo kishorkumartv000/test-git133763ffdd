@@ -25,12 +25,6 @@ on:
       actions_enabled:
         description: "Enable GitHub Actions? (true/false) (for set_actions_permissions)"
         required: false
-      allow_all_actions:
-        description: "Allow all actions? (true/false) (for set_actions_permissions)"
-        required: false
-      allow_reusable_workflows:
-        description: "Allow reusable workflows? (true/false) (for set_actions_permissions)"
-        required: false
 
 jobs:
   control:
@@ -45,7 +39,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install PyGithub==1.59.0 requests  # Specific version with Actions permissions support
+        run: pip install PyGithub==1.59.0 requests
 
       - name: Run control script
         env:
@@ -57,6 +51,4 @@ jobs:
           RELEASE_TITLE: ${{ inputs.release_title }}
           ASSET_URL: ${{ inputs.asset_url }}
           ACTIONS_ENABLED: ${{ inputs.actions_enabled }}
-          ALLOW_ALL_ACTIONS: ${{ inputs.allow_all_actions }}
-          ALLOW_REUSABLE_WORKFLOWS: ${{ inputs.allow_reusable_workflows }}
         run: python github_manager.py
