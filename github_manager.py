@@ -14,8 +14,6 @@ def main():
     release_title = os.getenv('RELEASE_TITLE')
     asset_url = os.getenv('ASSET_URL')
     actions_enabled = os.getenv('ACTIONS_ENABLED')
-    allow_all_actions = os.getenv('ALLOW_ALL_ACTIONS')
-    allow_reusable_workflows = os.getenv('ALLOW_REUSABLE_WORKFLOWS')
     
     # Validate inputs
     if not token:
@@ -140,58 +138,17 @@ def main():
             except GithubException as e:
                 print(f"❌ Error creating release: {e.data.get('message', str(e))}")
                 
-        elif operation == "set_actions_permissions" and repo_name:
+        elif operation == "set_actions_permissions" and repo_name and actions_enabled is not None:
             try:
                 repo = target.get_repo(repo_name)
+                enabled = actions_enabled.lower() == "true"
                 
-                # Build new permissions object
-                new_permissions = {}
+                # Update actions enabled status
+                repo.edit(actions_enabled=enabled)
                 
-                # Actions enabled/disabled
-                if actions_enabled is not None:
-                    enabled = actions_enabled.lower() == "true"
-                    new_permissions["enabled"] = enabled
-                    status = "🟢 ENABLED" if enabled else "🔴 DISABLED"
-                    print(f"Set Actions: {status}")
-                
-                # Only set other permissions if actions are enabled
-                if actions_enabled is None or actions_enabled.lower() == "true":
-                    # All actions configuration
-                    if allow_all_actions is not None:
-                        allow_all = allow_all_actions.lower() == "true"
-                        new_permissions["allowed_actions"] = "all" if allow_all else "selected"
-                        status = "✅ ALLOWED" if allow_all else "🚫 RESTRICTED"
-                        print(f"All Actions: {status}")
-                    
-                    # Reusable workflows configuration
-                    if allow_reusable_workflows is not None:
-                        allow_reusable = allow_reusable_workflows.lower() == "true"
-                        # For reusable workflows, we need to set allowed_actions to "selected"
-                        if allow_reusable:
-                            new_permissions["allowed_actions"] = "selected"
-                        new_permissions["enabled_repositories"] = "all" if allow_reusable else "none"
-                        status = "✅ ALLOWED" if allow_reusable else "🚫 BLOCKED"
-                        print(f"Reusable Workflows: {status}")
-                
-                # Update permissions if we have changes
-                if new_permissions:
-                    repo.edit(**new_permissions)
-                    print(f"✅ Updated Actions permissions for {repo_name}")
-                else:
-                    print("⚠️ No changes specified for Actions permissions")
-                    
-                # Print current settings
-                print("\nCurrent Actions Settings:")
-                print(f"- Enabled: {'🟢 YES' if repo.allow_auto_merge else '🔴 NO'}")  # Workaround for permissions
-                
-                # For PyGithub versions that support get_actions_permissions
-                try:
-                    updated = repo.get_actions_permissions()
-                    print(f"- All Actions: {'✅ ALLOWED' if updated.allowed_actions == 'all' else '🚫 RESTRICTED'}")
-                    print(f"- Reusable Workflows: {'✅ ALLOWED' if updated.enabled_repositories == 'all' else '🚫 BLOCKED'}")
-                except AttributeError:
-                    print("⚠️ Could not retrieve detailed actions settings. PyGithub version might be outdated.")
-                    print("   Please ensure you're using PyGithub v1.55 or later")
+                status = "🟢 ENABLED" if enabled else "🔴 DISABLED"
+                print(f"✅ GitHub Actions: {status}")
+                print(f"   - Repository: {repo_name}")
                 
             except GithubException as e:
                 print(f"❌ Error setting Actions permissions: {e.data.get('message', str(e))}")
