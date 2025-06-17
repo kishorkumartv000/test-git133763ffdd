@@ -414,7 +414,7 @@ def main():
                     ).strip()
                     default_branch = head_ref.split('/')[-1]
                     print(f"   - Source default branch: {default_branch}")
-                    
+
                     # Push to new repository
                     print(f"⬆️ Pushing to new repository: {new_repo.html_url}")
                     # Add token to URL for authentication
@@ -430,19 +430,59 @@ def main():
                         stderr=subprocess.PIPE
                     )
                     
+                    # Wait for GitHub to process all branches
+                    print("⏳ Waiting for GitHub to process branches (10 seconds)...")
+                    time.sleep(10)
+                    
+                    # Refresh repository data
+                    new_repo = g.get_repo(new_repo.full_name)
+                    
+                    # Verify branch exists on GitHub
+                    print("🔍 Verifying branch exists on GitHub...")
+                    max_retries = 3
+                    for attempt in range(1, max_retries + 1):
+                        try:
+                            # Check if branch exists
+                            new_repo.get_branch(default_branch)
+                            branch_exists = True
+                        except GithubException:
+                            branch_exists = False
+                        
+                        if branch_exists:
+                            break
+                            
+                        print(f"   ⚠️ Branch not found yet (attempt {attempt}/{max_retries}), waiting 5 seconds...")
+                        time.sleep(5)
+                    
+                    if not branch_exists:
+                        # Try to find a common fallback branch
+                        fallback_branches = ['main', 'master', 'develop']
+                        for branch in fallback_branches:
+                            try:
+                                new_repo.get_branch(branch)
+                                default_branch = branch
+                                print(f"   - Using fallback branch: {default_branch}")
+                                break
+                            except GithubException:
+                                continue
+                    
                     # Set default branch in the new repository
                     print("🔄 Setting default branch...")
                     try:
                         new_repo.edit(default_branch=default_branch)
-                        print(f"   - Default branch set to: {default_branch}")
+                        
+                        # Verify it was set
+                        updated_repo = g.get_repo(new_repo.full_name)
+                        actual_default = updated_repo.default_branch
+                        
+                        if actual_default == default_branch:
+                            print(f"   ✅ Default branch set to: {default_branch}")
+                        else:
+                            print(f"   ⚠️ Requested '{default_branch}' but actual default is '{actual_default}'")
+                        
                     except GithubException as e:
                         print(f"⚠️ Could not set default branch: {e.data.get('message', str(e))}")
-                        print(f"   - Using fallback branch: main")
-                        try:
-                            # Try to set to 'main' as fallback
-                            new_repo.edit(default_branch='main')
-                        except:
-                            print("   - Could not set any default branch")
+                        print(f"   - Using detected branch: {default_branch}")
                 
                 print(f"✅ Successfully cloned repository")
                 print(f"   - Source: {source_url}")
