@@ -7,7 +7,7 @@ on:
         description: "Target GitHub username/org"
         required: true
       operation:
-        description: "Operation (list_repos, create_repo, delete_repo, toggle_visibility, create_release, set_actions_permissions)"
+        description: "Operation (list_repos, create_repo, delete_repo, toggle_visibility, create_release, set_actions_permissions, run_workflow, cancel_workflows)"
         required: true
         default: "list_repos"
       repo_name:
@@ -30,6 +30,13 @@ on:
         required: false
       allow_reusable_workflows:
         description: "Allow reusable workflows? (true/false) (for set_actions_permissions)"
+        required: false
+      workflow_file:
+        description: "Workflow file path (e.g., .github/workflows/ci.yml) (for run_workflow)"
+        required: false
+      ref:
+        description: "Branch/tag/commit ref (default: main) (for run_workflow)"
+        default: "main"
         required: false
 
 jobs:
@@ -59,4 +66,6 @@ jobs:
           ACTIONS_ENABLED: ${{ inputs.actions_enabled }}
           ALLOW_ALL_ACTIONS: ${{ inputs.allow_all_actions }}
           ALLOW_REUSABLE_WORKFLOWS: ${{ inputs.allow_reusable_workflows }}
+          WORKFLOW_FILE: ${{ inputs.workflow_file }}
+          REF: ${{ inputs.ref }}
         run: python github_manager.py
