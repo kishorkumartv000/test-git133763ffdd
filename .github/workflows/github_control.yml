@@ -31,13 +31,6 @@ on:
       allow_reusable_workflows:
         description: "Allow reusable workflows? (true/false) (for set_actions_permissions)"
         required: false
-      workflow_file:
-        description: "Workflow file path (e.g., .github/workflows/ci.yml) (for run_workflow)"
-        required: false
-      ref:
-        description: "Branch/tag/commit ref (default: main) (for run_workflow)"
-        default: "main"
-        required: false
 
 jobs:
   control:
@@ -66,6 +59,4 @@ jobs:
           ACTIONS_ENABLED: ${{ inputs.actions_enabled }}
           ALLOW_ALL_ACTIONS: ${{ inputs.allow_all_actions }}
           ALLOW_REUSABLE_WORKFLOWS: ${{ inputs.allow_reusable_workflows }}
-          WORKFLOW_FILE: ${{ inputs.workflow_file }}
-          REF: ${{ inputs.ref }}
         run: python github_manager.py
