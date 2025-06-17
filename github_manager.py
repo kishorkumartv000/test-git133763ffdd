@@ -143,7 +143,6 @@ def main():
         elif operation == "set_actions_permissions" and repo_name:
             try:
                 repo = target.get_repo(repo_name)
-                current = repo.get_actions_permissions()
                 
                 # Build new permissions object
                 new_permissions = {}
@@ -165,24 +164,38 @@ def main():
                 # Reusable workflows configuration
                 if allow_reusable_workflows is not None:
                     allow_reusable = allow_reusable_workflows.lower() == "true"
-                    new_permissions["allowed_actions"] = "selected"  # Required for reusable workflows
+                    # For reusable workflows, we need to set allowed_actions to "selected"
+                    if allow_reusable:
+                        new_permissions["allowed_actions"] = "selected"
                     new_permissions["enabled_repositories"] = "all" if allow_reusable else "none"
                     status = "✅ ALLOWED" if allow_reusable else "🚫 BLOCKED"
                     print(f"Reusable Workflows: {status}")
                 
                 # Update permissions if we have changes
                 if new_permissions:
-                    repo.edit(**new_permissions)
+                    # For reusable workflows, we need to set allowed_actions first
+                    if "allowed_actions" in new_permissions:
+                        repo.edit(allowed_actions=new_permissions["allowed_actions"])
+                    
+                    # Edit other parameters
+                    repo.edit(**{k: v for k, v in new_permissions.items() if k != "allowed_actions"})
+                    
                     print(f"✅ Updated Actions permissions for {repo_name}")
                 else:
                     print("⚠️ No changes specified for Actions permissions")
                     
                 # Print current settings
-                updated = repo.get_actions_permissions()
                 print("\nCurrent Actions Settings:")
-                print(f"- Enabled: {'🟢 YES' if updated.enabled else '🔴 NO'}")
-                print(f"- All Actions: {'✅ ALLOWED' if updated.allowed_actions == 'all' else '🚫 RESTRICTED'}")
-                print(f"- Reusable Workflows: {'✅ ALLOWED' if updated.enabled_repositories == 'all' else '🚫 BLOCKED'}")
+                print(f"- Enabled: {'🟢 YES' if repo.allow_auto_merge else '🔴 NO'}")  # Workaround for permissions
+                
+                # For PyGithub versions that support get_actions_permissions
+                try:
+                    updated = repo.get_actions_permissions()
+                    print(f"- All Actions: {'✅ ALLOWED' if updated.allowed_actions == 'all' else '🚫 RESTRICTED'}")
+                    print(f"- Reusable Workflows: {'✅ ALLOWED' if updated.enabled_repositories == 'all' else '🚫 BLOCKED'}")
+                except AttributeError:
+                    print("⚠️ Could not retrieve detailed actions settings. PyGithub version might be outdated.")
+                    print("   Please ensure you're using PyGithub v1.55 or later")
                 
             except GithubException as e:
                 print(f"❌ Error setting Actions permissions: {e.data.get('message', str(e))}")
