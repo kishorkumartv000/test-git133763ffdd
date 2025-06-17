@@ -45,7 +45,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install PyGithub requests
+        run: pip install PyGithub==1.59.0 requests  # Specific version with Actions permissions support
 
       - name: Run control script
         env:
