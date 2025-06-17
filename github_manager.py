@@ -338,7 +338,7 @@ def main():
                 
                 # Create temp directory for cloning
                 with tempfile.TemporaryDirectory() as temp_dir:
-                    # Clone the source repository
+                    # Clone the source repository as a mirror
                     print(f"⬇️ Cloning repository: {source_url}")
                     subprocess.run(
                         ['git', 'clone', '--mirror', source_url, temp_dir],
@@ -346,6 +346,22 @@ def main():
                         stdout=subprocess.PIPE,
                         stderr=subprocess.PIPE
                     )
+                    
+                    # Remove pull request refs to avoid "deny updating a hidden ref" errors
+                    print("🧹 Cleaning up pull request references...")
+                    pull_refs = subprocess.run(
+                        ['git', '-C', temp_dir, 'for-each-ref', '--format=%(refname)', 'refs/pull/'],
+                        capture_output=True,
+                        text=True
+                    ).stdout.splitlines()
+                    
+                    for ref in pull_refs:
+                        if ref:  # Ensure ref is not empty
+                            subprocess.run(
+                                ['git', '-C', temp_dir, 'update-ref', '-d', ref],
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE
+                            )
                     
                     # Push to new repository
                     print(f"⬆️ Pushing to new repository: {new_repo.html_url}")
