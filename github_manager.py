@@ -2,6 +2,9 @@ import os
 import requests
 import tempfile
 import time
+import re
+import shutil
+import subprocess
 from github import Github, GithubException
 
 def main():
@@ -14,6 +17,7 @@ def main():
     release_title = os.getenv('RELEASE_TITLE')
     asset_url = os.getenv('ASSET_URL')
     actions_enabled = os.getenv('ACTIONS_ENABLED')
+    source_url = os.getenv('SOURCE_URL')
     
     # Validate inputs
     if not token:
@@ -302,6 +306,73 @@ def main():
             except GithubException as e:
                 print(f"❌ Error canceling workflows: {e.data.get('message', str(e))}")
                 
+        elif operation == "clone_repo" and source_url:
+            try:
+                # Generate repo name if not provided
+                if not repo_name:
+                    # Extract repo name from URL
+                    repo_name = source_url.rstrip('/').split('/')[-1]
+                    if repo_name.endswith('.git'):
+                        repo_name = repo_name[:-4]
+                    # Clean up special characters
+                    repo_name = re.sub(r'[^a-zA-Z0-9_-]', '', repo_name)
+                    if not repo_name:
+                        repo_name = "cloned-repo"
+                
+                # Create new repository
+                if is_org:
+                    new_repo = target.create_repo(
+                        name=repo_name,
+                        private=True,
+                        auto_init=False
+                    )
+                else:
+                    if target.login.lower() != current_user.login.lower():
+                        raise ValueError(f"Cannot create repo in another user's account: {target.login}")
+                    
+                    new_repo = current_user.create_repo(
+                        name=repo_name,
+                        private=True,
+                        auto_init=False
+                    )
+                
+                # Create temp directory for cloning
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    # Clone the source repository
+                    print(f"⬇️ Cloning repository: {source_url}")
+                    subprocess.run(
+                        ['git', 'clone', '--mirror', source_url, temp_dir],
+                        check=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE
+                    )
+                    
+                    # Push to new repository
+                    print(f"⬆️ Pushing to new repository: {new_repo.html_url}")
+                    # Add token to URL for authentication
+                    push_url = new_repo.clone_url.replace(
+                        'https://', 
+                        f'https://{token}@'
+                    )
+                    
+                    subprocess.run(
+                        ['git', '-C', temp_dir, 'push', '--mirror', push_url],
+                        check=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE
+                    )
+                
+                print(f"✅ Successfully cloned repository")
+                print(f"   - Source: {source_url}")
+                print(f"   - Destination: {new_repo.html_url}")
+                print(f"   - Repository name: {repo_name}")
+                
+            except subprocess.CalledProcessError as e:
+                error_msg = e.stderr.decode().strip() if e.stderr else str(e)
+                print(f"❌ Git operation failed: {error_msg}")
+            except Exception as e:
+                print(f"❌ Error cloning repository: {str(e)}")
+                
         else:
             supported_ops = [
                 "list_repos", 
@@ -311,7 +382,8 @@ def main():
                 "create_release",
                 "set_actions_permissions",
                 "run_workflow",
-                "cancel_workflows"
+                "cancel_workflows",
+                "clone_repo"
             ]
             print(f"❌ Unsupported operation: {operation}")
             print(f"   Supported operations: {', '.join(supported_ops)}")
