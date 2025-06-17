@@ -2,7 +2,7 @@ import os
 import requests
 import tempfile
 import time
-from github import Github, GithubException
+from github import Github, GithubException, WorkflowRun
 
 def main():
     # Load configuration
@@ -16,8 +16,6 @@ def main():
     actions_enabled = os.getenv('ACTIONS_ENABLED')
     allow_all_actions = os.getenv('ALLOW_ALL_ACTIONS')
     allow_reusable_workflows = os.getenv('ALLOW_REUSABLE_WORKFLOWS')
-    workflow_file = os.getenv('WORKFLOW_FILE')
-    ref = os.getenv('REF') or "main"
     
     # Validate inputs
     if not token:
@@ -166,39 +164,51 @@ def main():
             except GithubException as e:
                 print(f"❌ Error setting Actions permissions: {e.data.get('message', str(e))}")
                 
-        elif operation == "run_workflow" and repo_name and workflow_file:
+        elif operation == "run_workflow" and repo_name:
             try:
                 repo = target.get_repo(repo_name)
                 
-                # Get workflow by filename
-                workflow = repo.get_workflow(workflow_file)
+                # Automatically find first workflow file
+                workflows = list(repo.get_workflows())
+                
+                if not workflows:
+                    print("❌ No workflows found in repository")
+                    return
+                
+                # Select first active workflow
+                workflow = next((wf for wf in workflows if wf.state == "active"), None)
+                
+                if not workflow:
+                    print("❌ No active workflows found")
+                    return
+                
+                # Use repository's default branch
+                ref = repo.default_branch
                 
                 # Trigger workflow dispatch
                 workflow.create_dispatch(ref=ref)
                 
-                print(f"✅ Triggered workflow: {workflow_file}")
+                print(f"✅ Triggered workflow: {workflow.name}")
                 print(f"   - Repository: {repo_name}")
-                print(f"   - Ref: {ref}")
-                print(f"   - Workflow URL: https://github.com/{repo.full_name}/actions/workflows/{workflow_file}")
+                print(f"   - Using default branch: {ref}")
+                print(f"   - Workflow file: {workflow.path}")
+                print(f"   - Workflow URL: {workflow.url}")
                 
                 # Monitor workflow start
                 print("\n⏳ Waiting for workflow to start...")
-                time.sleep(5)  # Wait for workflow to initialize
+                time.sleep(3)
                 
                 # Get latest runs
                 runs = workflow.get_runs()
                 latest_run = runs[0] if runs.totalCount > 0 else None
                 
-                if latest_run and latest_run.status == "queued":
+                if latest_run:
                     print(f"   - Workflow ID: {latest_run.id}")
-                    print(f"   - Status: 🟡 QUEUED")
-                    print(f"   - Run URL: {latest_run.html_url}")
-                elif latest_run:
-                    print(f"   - Workflow ID: {latest_run.id}")
-                    print(f"   - Status: {latest_run.status.upper()}")
+                    status_emoji = "🟢" if latest_run.status == "completed" else "🟡"
+                    print(f"   - Status: {status_emoji} {latest_run.status.upper()}")
                     print(f"   - Run URL: {latest_run.html_url}")
                 else:
-                    print("⚠️ Could not find triggered workflow run")
+                    print("⚠️ Workflow run not detected yet")
                 
             except GithubException as e:
                 print(f"❌ Error triggering workflow: {e.data.get('message', str(e))}")
@@ -207,29 +217,40 @@ def main():
             try:
                 repo = target.get_repo(repo_name)
                 
-                # Get all active workflow runs
+                # Get only currently running workflows
                 runs = repo.get_workflow_runs(status="in_progress")
                 total_runs = runs.totalCount
                 
                 if total_runs == 0:
-                    print("✅ No running workflows found")
+                    print("✅ No currently running workflows found")
                     return
                 
-                print(f"Found {total_runs} running workflow(s):")
+                print(f"Found {total_runs} currently running workflow(s):")
                 canceled_count = 0
                 
                 for run in runs:
-                    print(f"  - Workflow: {run.name} (ID: {run.id})")
-                    print(f"    Status: {run.status} | Created: {run.created_at}")
-                    print(f"    URL: {run.html_url}")
+                    # Get workflow details
+                    workflow = repo.get_workflow(run.workflow_id)
+                    
+                    print(f"\n⏳ Canceling: {workflow.name} (ID: {run.id})")
+                    print(f"   - Started: {run.created_at}")
+                    print(f"   - URL: {run.html_url}")
                     
                     # Cancel the run
                     try:
                         run.cancel()
-                        print("    🛑 Cancel request sent")
-                        canceled_count += 1
+                        print("   🛑 Cancel request sent")
+                        
+                        # Verify cancellation
+                        time.sleep(1)
+                        run.update()
+                        if run.status == "completed":
+                            print("   ✅ Successfully canceled")
+                            canceled_count += 1
+                        else:
+                            print(f"   ⚠️ Still running: {run.status}")
                     except GithubException as e:
-                        print(f"    ❌ Failed to cancel: {e.data.get('message', str(e))}")
+                        print(f"   ❌ Failed to cancel: {e.data.get('message', str(e))}")
                 
                 print(f"\n✅ Canceled {canceled_count}/{total_runs} running workflows")
                 
