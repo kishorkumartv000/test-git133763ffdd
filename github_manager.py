@@ -178,11 +178,45 @@ def main():
                     print("   Please create a workflow in .github/workflows/ directory")
                     return
                 
-                # Find active workflows
-                active_workflows = [wf for wf in workflows if wf.state == "active"]
+                # Find active or inactive workflows
+                workflow_to_run = None
+                inactive_workflow = None
                 
-                if not active_workflows:
-                    # If no active workflows, show available workflows
+                for wf in workflows:
+                    if wf.state == "active":
+                        workflow_to_run = wf
+                        break
+                    elif wf.state in ["disabled_inactivity", "disabled_manually"]:
+                        inactive_workflow = wf
+                
+                # If no active workflow found but there's an inactive one, try to enable it
+                if not workflow_to_run and inactive_workflow:
+                    print(f"⚠️ Workflow is disabled ({inactive_workflow.state}). Attempting to enable...")
+                    try:
+                        # GitHub API endpoint to enable workflow
+                        url = f"https://api.github.com/repos/{repo.owner.login}/{repo.name}/actions/workflows/{inactive_workflow.id}/enable"
+                        headers = {
+                            "Authorization": f"token {token}",
+                            "Accept": "application/vnd.github.v3+json",
+                            "X-GitHub-Api-Version": "2022-11-28"
+                        }
+                        response = requests.put(url, headers=headers)
+                        
+                        if response.status_code == 204:
+                            print(f"✅ Enabled workflow: {inactive_workflow.name}")
+                            workflow_to_run = inactive_workflow
+                            # Wait for workflow to become active
+                            time.sleep(2)
+                        else:
+                            print(f"❌ Failed to enable workflow (HTTP {response.status_code})")
+                            print(f"   - {response.json().get('message', 'Unknown error')}")
+                            return
+                    except Exception as e:
+                        print(f"❌ Error enabling workflow: {str(e)}")
+                        return
+                
+                if not workflow_to_run:
+                    # If no workflow to run, show available workflows
                     print("❌ No active workflows found. Available workflows:")
                     for i, wf in enumerate(workflows, 1):
                         state_emoji = "🟢" if wf.state == "active" else "🔴"
@@ -190,27 +224,24 @@ def main():
                     print("\n💡 To activate a workflow, go to repository Actions tab")
                     return
                 
-                # Use the first active workflow
-                workflow = active_workflows[0]
-                
                 # Use repository's default branch
                 ref = repo.default_branch
                 
                 # Trigger workflow dispatch
-                workflow.create_dispatch(ref=ref)
+                workflow_to_run.create_dispatch(ref=ref)
                 
-                print(f"✅ Triggered workflow: {workflow.name}")
+                print(f"✅ Triggered workflow: {workflow_to_run.name}")
                 print(f"   - Repository: {repo_name}")
                 print(f"   - Using default branch: {ref}")
-                print(f"   - Workflow file: {workflow.path}")
-                print(f"   - Workflow URL: https://github.com/{repo.full_name}/actions/workflows/{os.path.basename(workflow.path)}")
+                print(f"   - Workflow file: {workflow_to_run.path}")
+                print(f"   - Workflow URL: https://github.com/{repo.full_name}/actions/workflows/{os.path.basename(workflow_to_run.path)}")
                 
                 # Monitor workflow start
                 print("\n⏳ Waiting for workflow to start...")
                 time.sleep(3)
                 
                 # Get latest runs
-                runs = workflow.get_runs()
+                runs = workflow_to_run.get_runs()
                 latest_run = runs[0] if runs.totalCount > 0 else None
                 
                 if latest_run:
