@@ -7,7 +7,7 @@ on:
         description: "Target GitHub username/org"
         required: true
       operation:
-        description: "Operation (list_repos, create_repo, delete_repo, toggle_visibility, create_release, set_actions_permissions, run_workflow, cancel_workflows)"
+        description: "Operation (list_repos, create_repo, delete_repo, toggle_visibility, create_release, set_actions_permissions, run_workflow, cancel_workflows, clone_repo)"
         required: true
         default: "list_repos"
       repo_name:
@@ -25,10 +25,14 @@ on:
       actions_enabled:
         description: "Enable GitHub Actions? (true/false) (for set_actions_permissions)"
         required: false
+      source_url:
+        description: "Source repository URL to clone (for clone_repo)"
+        required: false
 
 jobs:
   control:
     runs-on: ubuntu-latest
+    timeout-minutes: 60  # Increased timeout for cloning large repos
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -51,4 +55,5 @@ jobs:
           RELEASE_TITLE: ${{ inputs.release_title }}
           ASSET_URL: ${{ inputs.asset_url }}
           ACTIONS_ENABLED: ${{ inputs.actions_enabled }}
+          SOURCE_URL: ${{ inputs.source_url }}
         run: python github_manager.py
