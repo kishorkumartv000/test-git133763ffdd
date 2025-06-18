@@ -1,4 +1,4 @@
-name: GitHub Account Manager  # This should be at root level
+name: GitHub Account Manager  # MUST be at root level, not under 'on'
 
 on:
   workflow_dispatch:
