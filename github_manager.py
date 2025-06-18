@@ -16,6 +16,10 @@ def select_repository(repo_choices):
         
     try:
         repos = json.loads(repo_choices)
+        if not repos:
+            print("ℹ️ Repository list is empty")
+            return None
+            
         print("\n📋 Available repositories:")
         for i, repo_name in enumerate(repos, 1):
             print(f"{i}. {repo_name}")
@@ -42,14 +46,14 @@ def main():
     target_account = os.getenv('TARGET_ACCOUNT')
     operation = os.getenv('OPERATION')
     repo_name = os.getenv('REPO_NAME')
-    new_repo_name = os.getenv('NEW_REPO_NAME')  # For rename operation
+    new_repo_name = os.getenv('NEW_REPO_NAME')
     tag_name = os.getenv('TAG_NAME')
     release_title = os.getenv('RELEASE_TITLE')
     asset_url = os.getenv('ASSET_URL')
     actions_enabled = os.getenv('ACTIONS_ENABLED')
     source_url = os.getenv('SOURCE_URL')
     repo_visibility = os.getenv('REPO_VISIBILITY', 'private').lower()
-    repo_choices = os.getenv('REPO_CHOICES', '[]')  # NEW: Cached repository list
+    repo_choices = os.getenv('REPO_CHOICES', '[]')
     
     # Validate inputs
     if not token:
@@ -122,14 +126,19 @@ def main():
                 # Summary statistics
                 print(f"\n📊 Summary: {len(private_repos)} private, {len(public_repos)} public, {len(private_repos) + len(public_repos)} total repositories")
                 
-                # NEW: Output machine-readable list for caching
+                # Save repository list for caching
                 repo_names = [repo.name for repo in repos]
-                print(f"::set-output name=repo_list::{json.dumps(repo_names)}")
+                with open('repo-list.json', 'w') as f:
+                    json.dump(repo_names, f)
+                print("💾 Repository list saved for future use")
                 
             except GithubException as e:
                 print(f"❌ Error listing repositories: {e.data.get('message', str(e))}")
                 
-        elif operation == "create_repo" and repo_name:
+        elif operation == "create_repo":
+            if not repo_name:
+                print("❌ Repository name required for creation")
+                return
             try:
                 # Determine visibility from input
                 is_private = repo_visibility == 'private'
@@ -164,7 +173,7 @@ def main():
                 
         elif operation == "delete_repo":
             if not repo_name:
-                print("❌ Repository name required for delete operation")
+                print("❌ Repository name required for deletion")
                 return
             try:
                 repo = target.get_repo(repo_name)
@@ -189,7 +198,6 @@ def main():
             except GithubException as e:
                 print(f"❌ Error changing visibility: {e.data.get('message', str(e))}")
                 
-        # Rename repository operation
         elif operation == "rename_repo":
             if not repo_name:
                 print("❌ Current repository name required for rename")
@@ -470,7 +478,10 @@ def main():
             except GithubException as e:
                 print(f"❌ Error canceling workflows: {e.data.get('message', str(e))}")
                 
-        elif operation == "clone_repo" and source_url:
+        elif operation == "clone_repo":
+            if not source_url:
+                print("❌ Source URL required for cloning")
+                return
             try:
                 # Determine visibility from input
                 is_private = repo_visibility == 'private'
