@@ -53,8 +53,8 @@ jobs:
               if is_org:
                   repos = target.get_repos(affiliation='owner', visibility='all')
               else:
-                  # For user accounts, we need to use a different approach
-                  repos = g.search_repositories(f'user:{target_account}')
+                  # For user accounts
+                  repos = g.get_user(target_account).get_repos(affiliation='owner', visibility='all')
               
               repo_list = [repo.name for repo in repos]
               
@@ -62,8 +62,10 @@ jobs:
               with open('repo-list.json', 'w') as f:
                   json.dump(repo_list, f)
                   
-              # Set output
-              print(f'repo_list={json.dumps(repo_list)}' >> $GITHUB_OUTPUT)
+              # Set output using GitHub Actions environment file
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  f.write(f'repo_list={json.dumps(repo_list)}')
+                  
               print(f'Found {len(repo_list)} repositories')
               
           except Exception as e:
