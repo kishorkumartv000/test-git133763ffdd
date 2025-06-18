@@ -13,12 +13,13 @@ def main():
     target_account = os.getenv('TARGET_ACCOUNT')
     operation = os.getenv('OPERATION')
     repo_name = os.getenv('REPO_NAME')
+    new_repo_name = os.getenv('NEW_REPO_NAME')  # NEW: For rename operation
     tag_name = os.getenv('TAG_NAME')
     release_title = os.getenv('RELEASE_TITLE')
     asset_url = os.getenv('ASSET_URL')
     actions_enabled = os.getenv('ACTIONS_ENABLED')
     source_url = os.getenv('SOURCE_URL')
-    repo_visibility = os.getenv('REPO_VISIBILITY', 'private').lower()  # NEW: Visibility control
+    repo_visibility = os.getenv('REPO_VISIBILITY', 'private').lower()
     
     # Validate inputs
     if not token:
@@ -95,7 +96,7 @@ def main():
                     # Create in organization
                     repo = target.create_repo(
                         name=repo_name,
-                        private=is_private,  # UPDATED
+                        private=is_private,
                         auto_init=True
                     )
                 else:
@@ -105,11 +106,11 @@ def main():
                     
                     repo = current_user.create_repo(
                         name=repo_name,
-                        private=is_private,  # UPDATED
+                        private=is_private,
                         auto_init=True
                     )
                 
-                visibility = "Private" if is_private else "Public"  # NEW
+                visibility = "Private" if is_private else "Public"
                 print(f"✅ Created {visibility.lower()} repository: {repo.html_url}")
                 print(f"   - Visibility: {visibility}")
                 print(f"   - Owner: {repo.owner.login}")
@@ -139,6 +140,48 @@ def main():
                 print(f"   - URL: {repo.html_url}")
             except GithubException as e:
                 print(f"❌ Error changing visibility: {e.data.get('message', str(e))}")
+                
+        # NEW: Rename repository operation
+        elif operation == "rename_repo" and repo_name and new_repo_name:
+            try:
+                # Get the repository
+                repo = target.get_repo(repo_name)
+                
+                # Validate new name
+                if not re.match(r'^[a-zA-Z0-9_.-]+$', new_repo_name):
+                    raise ValueError("Invalid new repository name. Only alphanumeric, '-', '_' and '.' are allowed")
+                
+                # Save current details before rename
+                old_name = repo.name
+                old_url = repo.html_url
+                
+                # Rename the repository
+                repo.edit(name=new_repo_name)
+                
+                # Verify the rename
+                renamed_repo = target.get_repo(new_repo_name)
+                
+                print(f"✅ Successfully renamed repository")
+                print(f"   - Old name: {old_name}")
+                print(f"   - New name: {new_repo_name}")
+                print(f"   - Old URL: {old_url}")
+                print(f"   - New URL: {renamed_repo.html_url}")
+                
+                # Important considerations note
+                print("\n⚠️ Important notes about repository renaming:")
+                print("   - All existing Git URLs will redirect to the new location")
+                print("   - Webhooks and services will be updated automatically")
+                print("   - GitHub Pages might need reconfiguration")
+                print("   - GitHub Actions workflows using the old name should be updated")
+                
+            except ValueError as ve:
+                print(f"❌ {str(ve)}")
+            except GithubException as ge:
+                print(f"❌ GitHub API error: {ge.data.get('message', str(ge))}")
+                if "name already exists" in str(ge).lower():
+                    print("   A repository with this name already exists in the target account")
+                elif "insufficient permission" in str(ge).lower():
+                    print("   Your token doesn't have permission to rename repositories")
                 
         elif operation == "create_release" and repo_name and tag_name and release_title:
             try:
@@ -354,7 +397,7 @@ def main():
                 
         elif operation == "clone_repo" and source_url:
             try:
-                # Determine visibility from input (NEW)
+                # Determine visibility from input
                 is_private = repo_visibility == 'private'
                 
                 # Generate repo name if not provided
@@ -372,7 +415,7 @@ def main():
                 if is_org:
                     new_repo = target.create_repo(
                         name=repo_name,
-                        private=is_private,  # UPDATED
+                        private=is_private,
                         auto_init=False
                     )
                 else:
@@ -381,7 +424,7 @@ def main():
                     
                     new_repo = current_user.create_repo(
                         name=repo_name,
-                        private=is_private,  # UPDATED
+                        private=is_private,
                         auto_init=False
                     )
                 
@@ -491,7 +534,7 @@ def main():
                         print(f"⚠️ Could not set default branch: {e.data.get('message', str(e))}")
                         print(f"   - Using detected branch: {default_branch}")
                 
-                visibility = "Private" if is_private else "Public"  # NEW
+                visibility = "Private" if is_private else "Public"
                 print(f"✅ Successfully cloned {visibility.lower()} repository")
                 print(f"   - Source: {source_url}")
                 print(f"   - Destination: {new_repo.html_url}")
@@ -515,7 +558,8 @@ def main():
                 "set_actions_permissions",
                 "run_workflow",
                 "cancel_workflows",
-                "clone_repo"
+                "clone_repo",
+                "rename_repo"  # ADDED TO SUPPORTED OPS
             ]
             print(f"❌ Unsupported operation: {operation}")
             print(f"   Supported operations: {', '.join(supported_ops)}")
