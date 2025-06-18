@@ -7,9 +7,20 @@ on:
         description: "Target GitHub username/org"
         required: true
       operation:
-        description: "Operation (list_repos, create_repo, delete_repo, toggle_visibility, create_release, set_actions_permissions, run_workflow, cancel_workflows, clone_repo)"
+        description: "Select operation to perform"
         required: true
         default: "list_repos"
+        type: choice
+        options:
+          - list_repos
+          - create_repo
+          - delete_repo
+          - toggle_visibility
+          - create_release
+          - set_actions_permissions
+          - run_workflow
+          - cancel_workflows
+          - clone_repo
       repo_name:
         description: "Repository name"
         required: false
@@ -28,8 +39,8 @@ on:
       source_url:
         description: "Source repository URL to clone (for clone_repo)"
         required: false
-      visibility:  # NEW PARAMETER
-        description: "Visibility for create/clone operations (public/private)"
+      visibility:
+        description: "Visibility for create/clone operations"
         required: false
         default: "private"
         type: choice
@@ -64,5 +75,5 @@ jobs:
           ASSET_URL: ${{ inputs.asset_url }}
           ACTIONS_ENABLED: ${{ inputs.actions_enabled }}
           SOURCE_URL: ${{ inputs.source_url }}
-          REPO_VISIBILITY: ${{ inputs.visibility }}  # NEW ENV VAR
+          REPO_VISIBILITY: ${{ inputs.visibility }}
         run: python github_manager.py
