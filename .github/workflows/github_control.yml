@@ -1,4 +1,4 @@
-name: GitHub Account Manager
+name: GitHub Account Manager  # This should be at root level
 
 on:
   workflow_dispatch:
@@ -70,7 +70,7 @@ jobs:
         with:
           name: repo-list
           path: .
-        continue-on-error: true  # Don't fail if cache doesn't exist
+        continue-on-error: true
           
       - name: Set repository list
         id: set-repo-list
