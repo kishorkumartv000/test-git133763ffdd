@@ -1,0 +1,64 @@
+name: Repository Lister
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_account:
+        description: "Target GitHub username/org"
+        required: true
+
+jobs:
+  list_repos:
+    runs-on: ubuntu-latest
+    outputs:
+      repo_list: ${{ steps.set-repo-list.outputs.repo_list }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install PyGithub==1.59.0
+
+      - name: List repositories
+        id: list-repos
+        env:
+          GITHUB_TOKEN: ${{ secrets.MASTER_TOKEN }}
+          TARGET_ACCOUNT: ${{ inputs.target_account }}
+        run: |
+          python -c "
+          from github import Github
+          import os
+          import json
+
+          token = os.getenv('GITHUB_TOKEN')
+          target_account = os.getenv('TARGET_ACCOUNT')
+          
+          g = Github(token)
+          try:
+              org = g.get_organization(target_account)
+              repos = org.get_repos(affiliation='owner', visibility='all')
+          except:
+              user = g.get_user(target_account)
+              repos = user.get_repos(affiliation='owner', visibility='all')
+          
+          repo_list = [repo.name for repo in repos]
+          print(f'::set-output name=repo_list::{json.dumps(repo_list)}')
+          print(f'Found {len(repo_list)} repositories')
+          "
+
+      - name: Set repository list output
+        id: set-repo-list
+        run: |
+          echo "repo_list=${{ steps.list-repos.outputs.repo_list }}" >> $GITHUB_OUTPUT
+
+      - name: Save repository list
+        uses: actions/upload-artifact@v3
+        with:
+          name: repo-list
+          path: |
+            ${{ steps.list-repos.outputs.repo_list }}
