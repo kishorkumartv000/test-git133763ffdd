@@ -5,7 +5,36 @@ import time
 import re
 import shutil
 import subprocess
+import json
 from github import Github, GithubException
+
+def select_repository(repo_choices):
+    """Allow user to select a repository from the cached list"""
+    if not repo_choices:
+        print("❌ No repositories available for selection")
+        return None
+        
+    try:
+        repos = json.loads(repo_choices)
+        print("\n📋 Available repositories:")
+        for i, repo_name in enumerate(repos, 1):
+            print(f"{i}. {repo_name}")
+            
+        selection = input("\nEnter the number of the repository: ")
+        if not selection.isdigit():
+            print("❌ Invalid selection. Please enter a number.")
+            return None
+            
+        index = int(selection) - 1
+        if index < 0 or index >= len(repos):
+            print("❌ Selection out of range")
+            return None
+            
+        return repos[index]
+        
+    except Exception as e:
+        print(f"❌ Error selecting repository: {str(e)}")
+        return None
 
 def main():
     # Load configuration
@@ -13,13 +42,14 @@ def main():
     target_account = os.getenv('TARGET_ACCOUNT')
     operation = os.getenv('OPERATION')
     repo_name = os.getenv('REPO_NAME')
-    new_repo_name = os.getenv('NEW_REPO_NAME')  # NEW: For rename operation
+    new_repo_name = os.getenv('NEW_REPO_NAME')  # For rename operation
     tag_name = os.getenv('TAG_NAME')
     release_title = os.getenv('RELEASE_TITLE')
     asset_url = os.getenv('ASSET_URL')
     actions_enabled = os.getenv('ACTIONS_ENABLED')
     source_url = os.getenv('SOURCE_URL')
     repo_visibility = os.getenv('REPO_VISIBILITY', 'private').lower()
+    repo_choices = os.getenv('REPO_CHOICES', '[]')  # NEW: Cached repository list
     
     # Validate inputs
     if not token:
@@ -38,6 +68,14 @@ def main():
         except GithubException:
             target = g.get_user(target_account)
             is_org = False
+        
+        # Handle repository selection if needed
+        if not repo_name and operation not in ["create_repo", "clone_repo", "list_repos"]:
+            print("ℹ️ No repository specified, showing selection menu")
+            repo_name = select_repository(repo_choices)
+            if not repo_name:
+                print("❌ Repository selection required")
+                return
         
         # Perform operations
         if operation == "list_repos":
@@ -84,12 +122,16 @@ def main():
                 # Summary statistics
                 print(f"\n📊 Summary: {len(private_repos)} private, {len(public_repos)} public, {len(private_repos) + len(public_repos)} total repositories")
                 
+                # NEW: Output machine-readable list for caching
+                repo_names = [repo.name for repo in repos]
+                print(f"::set-output name=repo_list::{json.dumps(repo_names)}")
+                
             except GithubException as e:
                 print(f"❌ Error listing repositories: {e.data.get('message', str(e))}")
                 
         elif operation == "create_repo" and repo_name:
             try:
-                # Determine visibility from input (NEW)
+                # Determine visibility from input
                 is_private = repo_visibility == 'private'
                 
                 if is_org:
@@ -120,7 +162,10 @@ def main():
             except GithubException as ge:
                 print(f"❌ GitHub API error: {ge.data.get('message', str(ge))}")
                 
-        elif operation == "delete_repo" and repo_name:
+        elif operation == "delete_repo":
+            if not repo_name:
+                print("❌ Repository name required for delete operation")
+                return
             try:
                 repo = target.get_repo(repo_name)
                 repo.delete()
@@ -128,7 +173,10 @@ def main():
             except GithubException as e:
                 print(f"❌ Error deleting repo: {e.data.get('message', str(e))}")
                 
-        elif operation == "toggle_visibility" and repo_name:
+        elif operation == "toggle_visibility":
+            if not repo_name:
+                print("❌ Repository name required for visibility toggle")
+                return
             try:
                 repo = target.get_repo(repo_name)
                 new_visibility = not repo.private
@@ -141,8 +189,14 @@ def main():
             except GithubException as e:
                 print(f"❌ Error changing visibility: {e.data.get('message', str(e))}")
                 
-        # NEW: Rename repository operation
-        elif operation == "rename_repo" and repo_name and new_repo_name:
+        # Rename repository operation
+        elif operation == "rename_repo":
+            if not repo_name:
+                print("❌ Current repository name required for rename")
+                return
+            if not new_repo_name:
+                print("❌ New repository name required for rename")
+                return
             try:
                 # Get the repository
                 repo = target.get_repo(repo_name)
@@ -183,7 +237,16 @@ def main():
                 elif "insufficient permission" in str(ge).lower():
                     print("   Your token doesn't have permission to rename repositories")
                 
-        elif operation == "create_release" and repo_name and tag_name and release_title:
+        elif operation == "create_release":
+            if not repo_name:
+                print("❌ Repository name required for release creation")
+                return
+            if not tag_name:
+                print("❌ Tag name required for release creation")
+                return
+            if not release_title:
+                print("❌ Release title required for release creation")
+                return
             try:
                 repo = target.get_repo(repo_name)
                 
@@ -231,7 +294,13 @@ def main():
             except GithubException as e:
                 print(f"❌ Error creating release: {e.data.get('message', str(e))}")
                 
-        elif operation == "set_actions_permissions" and repo_name and actions_enabled is not None:
+        elif operation == "set_actions_permissions":
+            if not repo_name:
+                print("❌ Repository name required for actions permissions")
+                return
+            if actions_enabled is None:
+                print("❌ Actions enabled status required (true/false)")
+                return
             try:
                 repo = target.get_repo(repo_name)
                 enabled = actions_enabled.lower() == "true"
@@ -259,7 +328,10 @@ def main():
             except Exception as e:
                 print(f"❌ Unexpected error: {str(e)}")
                 
-        elif operation == "run_workflow" and repo_name:
+        elif operation == "run_workflow":
+            if not repo_name:
+                print("❌ Repository name required to run workflow")
+                return
             try:
                 repo = target.get_repo(repo_name)
                 
@@ -351,7 +423,10 @@ def main():
                 if "Not Found" in str(e):
                     print("   Make sure the workflow file exists in .github/workflows/")
                 
-        elif operation == "cancel_workflows" and repo_name:
+        elif operation == "cancel_workflows":
+            if not repo_name:
+                print("❌ Repository name required to cancel workflows")
+                return
             try:
                 repo = target.get_repo(repo_name)
                 
@@ -559,7 +634,7 @@ def main():
                 "run_workflow",
                 "cancel_workflows",
                 "clone_repo",
-                "rename_repo"  # ADDED TO SUPPORTED OPS
+                "rename_repo"
             ]
             print(f"❌ Unsupported operation: {operation}")
             print(f"   Supported operations: {', '.join(supported_ops)}")
