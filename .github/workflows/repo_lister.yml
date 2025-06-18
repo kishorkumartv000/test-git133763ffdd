@@ -40,23 +40,34 @@ jobs:
           
           try:
               g = Github(token)
+              current_user = g.get_user().login
+              
+              # Determine if target is organization or user
               try:
                   # Try to get as organization
-                  target = g.get_organization(target_account)
+                  org = g.get_organization(target_account)
                   is_org = True
               except GithubException:
-                  # If fails, try as user
-                  target = g.get_user(target_account)
+                  # If fails, treat as user
+                  user = g.get_user(target_account)
                   is_org = False
               
-              # Get repositories with proper affiliation
+              # Fetch repositories based on account type
               if is_org:
-                  repos = target.get_repos(affiliation='owner', visibility='all')
+                  repos = org.get_repos(affiliation='owner', visibility='all')
               else:
-                  # For user accounts
-                  repos = g.get_user(target_account).get_repos(affiliation='owner', visibility='all')
+                  # For user accounts, get all repositories
+                  repos = user.get_repos()
               
-              repo_list = [repo.name for repo in repos]
+              # Filter repositories to only those owned by the target account
+              repo_list = []
+              for repo in repos:
+                  # For organizations, all repos are owned
+                  if is_org:
+                      repo_list.append(repo.name)
+                  # For users, only include repos they own
+                  elif repo.owner.login.lower() == target_account.lower():
+                      repo_list.append(repo.name)
               
               # Save to file for artifact
               with open('repo-list.json', 'w') as f:
@@ -66,7 +77,7 @@ jobs:
               with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
                   f.write(f'repo_list={json.dumps(repo_list)}')
                   
-              print(f'Found {len(repo_list)} repositories')
+              print(f'Found {len(repo_list)} repositories for {target_account}')
               
           except Exception as e:
               print(f'Error: {str(e)}')
