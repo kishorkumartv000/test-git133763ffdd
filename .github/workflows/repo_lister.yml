@@ -11,7 +11,7 @@ jobs:
   list_repos:
     runs-on: ubuntu-latest
     outputs:
-      repo_list: ${{ steps.set-repo-list.outputs.repo_list }}
+      repo_list: ${{ steps.list-repos.outputs.repo_list }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -31,34 +31,36 @@ jobs:
           TARGET_ACCOUNT: ${{ inputs.target_account }}
         run: |
           python -c "
-          from github import Github
+          from github import Github, GithubException
           import os
           import json
 
           token = os.getenv('GITHUB_TOKEN')
           target_account = os.getenv('TARGET_ACCOUNT')
           
-          g = Github(token)
           try:
-              org = g.get_organization(target_account)
-              repos = org.get_repos(affiliation='owner', visibility='all')
-          except:
-              user = g.get_user(target_account)
-              repos = user.get_repos(affiliation='owner', visibility='all')
-          
-          repo_list = [repo.name for repo in repos]
-          print(f'::set-output name=repo_list::{json.dumps(repo_list)}')
-          print(f'Found {len(repo_list)} repositories')
+              g = Github(token)
+              try:
+                  org = g.get_organization(target_account)
+                  repos = org.get_repos(affiliation='owner', visibility='all')
+              except GithubException:
+                  user = g.get_user(target_account)
+                  repos = user.get_repos(affiliation='owner', visibility='all')
+              
+              repo_list = [repo.name for repo in repos]
+              # Write to file for artifact upload
+              with open('repo-list.json', 'w') as f:
+                  json.dump(repo_list, f)
+              # Set output using new method
+              print(f'repo_list={json.dumps(repo_list)}' >> $GITHUB_OUTPUT)
+              print(f'Found {len(repo_list)} repositories')
+          except Exception as e:
+              print(f'Error: {str(e)}')
+              exit(1)
           "
-
-      - name: Set repository list output
-        id: set-repo-list
-        run: |
-          echo "repo_list=${{ steps.list-repos.outputs.repo_list }}" >> $GITHUB_OUTPUT
 
       - name: Save repository list
         uses: actions/upload-artifact@v4
         with:
           name: repo-list
-          path: |
-            ${{ steps.list-repos.outputs.repo_list }}
+          path: repo-list.json
