@@ -21,8 +21,12 @@ on:
           - run_workflow
           - cancel_workflows
           - clone_repo
+          - rename_repo  # NEW OPERATION
       repo_name:
-        description: "Repository name"
+        description: "Repository name (current name for rename)"
+        required: false
+      new_repo_name:  # NEW INPUT FIELD
+        description: "New repository name (for rename operation)"
         required: false
       tag_name:
         description: "Tag name for release (for create_release)"
@@ -40,7 +44,7 @@ on:
         description: "Source repository URL to clone (for clone_repo)"
         required: false
       visibility:
-        description: "Visibility for create/clone operations (public/private)"
+        description: "Visibility for create/clone operations"
         required: false
         default: "private"
         type: choice
@@ -70,6 +74,7 @@ jobs:
           TARGET_ACCOUNT: ${{ inputs.target_account }}
           OPERATION: ${{ inputs.operation }}
           REPO_NAME: ${{ inputs.repo_name }}
+          NEW_REPO_NAME: ${{ inputs.new_repo_name }}  # NEW ENV VAR
           TAG_NAME: ${{ inputs.tag_name }}
           RELEASE_TITLE: ${{ inputs.release_title }}
           ASSET_URL: ${{ inputs.asset_url }}
