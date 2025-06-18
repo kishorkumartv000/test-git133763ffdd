@@ -18,6 +18,7 @@ def main():
     asset_url = os.getenv('ASSET_URL')
     actions_enabled = os.getenv('ACTIONS_ENABLED')
     source_url = os.getenv('SOURCE_URL')
+    repo_visibility = os.getenv('REPO_VISIBILITY', 'private').lower()  # NEW: Visibility control
     
     # Validate inputs
     if not token:
@@ -26,7 +27,7 @@ def main():
         raise ValueError("Missing TARGET_ACCOUNT")
     
     g = Github(token)
-    current_user = g.get_user()  # Get authenticated user
+    current_user = g.get_user()
     
     try:
         # Get target user/org
@@ -44,11 +45,10 @@ def main():
                 private_repos = []
                 public_repos = []
                 
-                # FIXED: Fetch ALL repositories including private ones
+                # Fetch ALL repositories including private ones
                 if is_org:
                     repos = target.get_repos(affiliation="owner", visibility="all")
                 else:
-                    # For user accounts, use the current authenticated user
                     repos = current_user.get_repos(affiliation="owner", visibility="all")
                 
                 # Fetch and categorize repositories
@@ -88,11 +88,14 @@ def main():
                 
         elif operation == "create_repo" and repo_name:
             try:
+                # Determine visibility from input (NEW)
+                is_private = repo_visibility == 'private'
+                
                 if is_org:
                     # Create in organization
                     repo = target.create_repo(
                         name=repo_name,
-                        private=True,
+                        private=is_private,  # UPDATED
                         auto_init=True
                     )
                 else:
@@ -102,12 +105,13 @@ def main():
                     
                     repo = current_user.create_repo(
                         name=repo_name,
-                        private=True,
+                        private=is_private,  # UPDATED
                         auto_init=True
                     )
                 
-                print(f"✅ Created repository: {repo.html_url}")
-                print(f"   - Visibility: {'Private' if repo.private else 'Public'}")
+                visibility = "Private" if is_private else "Public"  # NEW
+                print(f"✅ Created {visibility.lower()} repository: {repo.html_url}")
+                print(f"   - Visibility: {visibility}")
                 print(f"   - Owner: {repo.owner.login}")
                 
             except ValueError as ve:
@@ -350,6 +354,9 @@ def main():
                 
         elif operation == "clone_repo" and source_url:
             try:
+                # Determine visibility from input (NEW)
+                is_private = repo_visibility == 'private'
+                
                 # Generate repo name if not provided
                 if not repo_name:
                     # Extract repo name from URL
@@ -365,7 +372,7 @@ def main():
                 if is_org:
                     new_repo = target.create_repo(
                         name=repo_name,
-                        private=True,
+                        private=is_private,  # UPDATED
                         auto_init=False
                     )
                 else:
@@ -374,7 +381,7 @@ def main():
                     
                     new_repo = current_user.create_repo(
                         name=repo_name,
-                        private=True,
+                        private=is_private,  # UPDATED
                         auto_init=False
                     )
                 
@@ -484,11 +491,13 @@ def main():
                         print(f"⚠️ Could not set default branch: {e.data.get('message', str(e))}")
                         print(f"   - Using detected branch: {default_branch}")
                 
-                print(f"✅ Successfully cloned repository")
+                visibility = "Private" if is_private else "Public"  # NEW
+                print(f"✅ Successfully cloned {visibility.lower()} repository")
                 print(f"   - Source: {source_url}")
                 print(f"   - Destination: {new_repo.html_url}")
                 print(f"   - Repository name: {repo_name}")
                 print(f"   - Default branch: {default_branch}")
+                print(f"   - Visibility: {visibility}")
                 
             except subprocess.CalledProcessError as e:
                 error_msg = e.stderr.decode().strip() if e.stderr else str(e)
