@@ -28,11 +28,19 @@ on:
       source_url:
         description: "Source repository URL to clone (for clone_repo)"
         required: false
+      visibility:  # NEW PARAMETER
+        description: "Visibility for create/clone operations (public/private)"
+        required: false
+        default: "private"
+        type: choice
+        options:
+          - private
+          - public
 
 jobs:
   control:
     runs-on: ubuntu-latest
-    timeout-minutes: 60  # Increased timeout for cloning large repos
+    timeout-minutes: 60
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -56,4 +64,5 @@ jobs:
           ASSET_URL: ${{ inputs.asset_url }}
           ACTIONS_ENABLED: ${{ inputs.actions_enabled }}
           SOURCE_URL: ${{ inputs.source_url }}
+          REPO_VISIBILITY: ${{ inputs.visibility }}  # NEW ENV VAR
         run: python github_manager.py
