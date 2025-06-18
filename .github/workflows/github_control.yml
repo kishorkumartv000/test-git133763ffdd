@@ -62,66 +62,25 @@ jobs:
     if: ${{ inputs.operation != 'create_repo' && inputs.operation != 'clone_repo' }}
     runs-on: ubuntu-latest
     outputs:
-      repo_list: ${{ steps.get-repo-list.outputs.repo_list }}
+      repo_list: ${{ steps.set-repo-list.outputs.repo_list }}
     steps:
-      - name: Check for cached repositories
+      - name: Download cached repository list
         if: ${{ inputs.use_cached_repos }}
         uses: actions/download-artifact@v3
         with:
           name: repo-list
-          path: repo-list.txt
+          path: .
           
-      - name: Get repository list from cache
-        if: ${{ inputs.use_cached_repos && success() }}
-        id: cached-repos
+      - name: Set repository list
+        id: set-repo-list
         run: |
-          if [ -f "repo-list.txt" ]; then
-            repo_list=$(cat repo-list.txt)
+          if ${{ inputs.use_cached_repos }} && [ -f "repo-list.json" ]; then
+            repo_list=$(cat repo-list.json)
             echo "repo_list=$repo_list" >> $GITHUB_OUTPUT
             echo "Using cached repository list"
           else
+            echo "repo_list=[]" >> $GITHUB_OUTPUT
             echo "No cached repository list found"
-          fi
-          
-      - name: Get fresh repository list
-        if: ${{ !inputs.use_cached_repos || !steps.cached-repos.outputs.repo_list }}
-        uses: actions/github-script@v6
-        id: fresh-repos
-        with:
-          script: |
-            const result = await github.rest.actions.listWorkflowRunArtifacts({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: context.runId,
-            });
-            
-            const repoListArtifact = result.data.artifacts.find(
-              artifact => artifact.name === 'repo-list'
-            );
-            
-            if (!repoListArtifact) {
-              core.setOutput('repo_list', '[]');
-              return;
-            }
-            
-            const download = await github.rest.actions.downloadArtifact({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              artifact_id: repoListArtifact.id,
-              archive_format: 'zip',
-            });
-            
-            // Parse and return repository list
-            const repoList = JSON.parse(Buffer.from(download.data).toString());
-            core.setOutput('repo_list', JSON.stringify(repoList));
-            
-      - name: Set repository list
-        id: get-repo-list
-        run: |
-          if [ -n "${{ steps.cached-repos.outputs.repo_list }}" ]; then
-            echo "repo_list=${{ steps.cached-repos.outputs.repo_list }}" >> $GITHUB_OUTPUT
-          else
-            echo "repo_list=${{ steps.fresh-repos.outputs.repo_list }}" >> $GITHUB_OUTPUT
           fi
 
   control:
@@ -140,13 +99,8 @@ jobs:
       - name: Install dependencies
         run: pip install PyGithub==1.59.0 requests
 
-      - name: Generate repository choices
-        id: repo-choices
-        run: |
-          echo "REPO_CHOICES=${{ needs.get_repos.outputs.repo_list }}" >> $GITHUB_ENV
-          echo "Available repositories: ${{ needs.get_repos.outputs.repo_list }}"
-
       - name: Run control script
+        id: run-script
         env:
           GITHUB_TOKEN: ${{ secrets.MASTER_TOKEN }}
           TARGET_ACCOUNT: ${{ inputs.target_account }}
@@ -159,5 +113,12 @@ jobs:
           ACTIONS_ENABLED: ${{ inputs.actions_enabled }}
           SOURCE_URL: ${{ inputs.source_url }}
           REPO_VISIBILITY: ${{ inputs.visibility }}
-          REPO_CHOICES: ${{ env.REPO_CHOICES }}
+          REPO_CHOICES: ${{ needs.get_repos.outputs.repo_list }}
         run: python github_manager.py
+        
+      - name: Save repository list
+        if: ${{ inputs.operation == 'list_repos' }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: repo-list
+          path: repo-list.json
