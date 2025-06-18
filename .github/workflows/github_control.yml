@@ -64,24 +64,76 @@ jobs:
     outputs:
       repo_list: ${{ steps.set-repo-list.outputs.repo_list }}
     steps:
-      - name: Download cached repository list
+      - name: Check for cached repositories
         if: ${{ inputs.use_cached_repos }}
         uses: actions/download-artifact@v3
         with:
           name: repo-list
           path: .
-          
-      - name: Set repository list
-        id: set-repo-list
+        continue-on-error: true  # Prevent failure if artifact doesn't exist
+
+      - name: Get repository list from cache
+        if: ${{ inputs.use_cached_repos }}
+        id: cached-repos
         run: |
-          if ${{ inputs.use_cached_repos }} && [ -f "repo-list.json" ]; then
-            repo_list=$(cat repo-list.json)
+          if [ -f "repo-list.txt" ]; then
+            repo_list=$(cat repo-list.txt)
             echo "repo_list=$repo_list" >> $GITHUB_OUTPUT
             echo "Using cached repository list"
           else
-            echo "repo_list=[]" >> $GITHUB_OUTPUT
             echo "No cached repository list found"
           fi
+
+      - name: Get fresh repository list
+        if: ${{ !inputs.use_cached_repos || !steps.cached-repos.outputs.repo_list }}
+        uses: actions/github-script@v6
+        id: fresh-repos
+        with:
+          github-token: ${{ secrets.MASTER_TOKEN }}
+          script: |
+            const targetAccount = '${{ inputs.target_account }}';
+            try {
+              // Try as organization
+              const repos = await github.paginate(github.rest.repos.listForOrg, {
+                org: targetAccount,
+                type: 'all',
+                per_page: 100,
+              });
+              return repos.map(repo => repo.name);
+            } catch (orgError) {
+              if (orgError.status === 404) {
+                // Try as user
+                const repos = await github.paginate(github.rest.repos.listForUser, {
+                  username: targetAccount,
+                  type: 'all',
+                  per_page: 100,
+                });
+                return repos.map(repo => repo.name);
+              }
+              throw orgError;
+            }
+
+      - name: Set repository list
+        id: set-repo-list
+        run: |
+          if [ -n "${{ steps.cached-repos.outputs.repo_list }}" ]; then
+            echo "repo_list=${{ steps.cached-repos.outputs.repo_list }}" >> $GITHUB_OUTPUT
+          elif [ -n "${{ steps.fresh-repos.outputs.result }}" ]; then
+            echo "repo_list=${{ steps.fresh-repos.outputs.result }}" >> $GITHUB_OUTPUT
+            # Cache for next run if requested
+            if ${{ inputs.use_cached_repos }}; then
+              echo '${{ steps.fresh-repos.outputs.result }}' > repo-list.txt
+            fi
+          else
+            echo "repo_list=[]" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload repository list artifact
+        if: ${{ inputs.use_cached_repos && steps.fresh-repos.outcome == 'success' }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: repo-list
+          path: repo-list.txt
 
   control:
     needs: get_repos
@@ -100,7 +152,6 @@ jobs:
         run: pip install PyGithub==1.59.0 requests
 
       - name: Run control script
-        id: run-script
         env:
           GITHUB_TOKEN: ${{ secrets.MASTER_TOKEN }}
           TARGET_ACCOUNT: ${{ inputs.target_account }}
@@ -115,10 +166,3 @@ jobs:
           REPO_VISIBILITY: ${{ inputs.visibility }}
           REPO_CHOICES: ${{ needs.get_repos.outputs.repo_list }}
         run: python github_manager.py
-        
-      - name: Save repository list
-        if: ${{ inputs.operation == 'list_repos' }}
-        uses: actions/upload-artifact@v3
-        with:
-          name: repo-list
-          path: repo-list.json
