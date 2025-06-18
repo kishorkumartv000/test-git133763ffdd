@@ -41,25 +41,37 @@ jobs:
           try:
               g = Github(token)
               try:
-                  org = g.get_organization(target_account)
-                  repos = org.get_repos(affiliation='owner', visibility='all')
+                  # Try to get as organization
+                  target = g.get_organization(target_account)
+                  is_org = True
               except GithubException:
-                  user = g.get_user(target_account)
-                  repos = user.get_repos(affiliation='owner', visibility='all')
+                  # If fails, try as user
+                  target = g.get_user(target_account)
+                  is_org = False
+              
+              # Get repositories with proper affiliation
+              if is_org:
+                  repos = target.get_repos(affiliation='owner', visibility='all')
+              else:
+                  # For user accounts, we need to use a different approach
+                  repos = g.search_repositories(f'user:{target_account}')
               
               repo_list = [repo.name for repo in repos]
-              # Write to file for artifact upload
+              
+              # Save to file for artifact
               with open('repo-list.json', 'w') as f:
                   json.dump(repo_list, f)
-              # Set output using new method
+                  
+              # Set output
               print(f'repo_list={json.dumps(repo_list)}' >> $GITHUB_OUTPUT)
               print(f'Found {len(repo_list)} repositories')
+              
           except Exception as e:
               print(f'Error: {str(e)}')
               exit(1)
           "
 
-      - name: Save repository list
+      - name: Upload repository list
         uses: actions/upload-artifact@v4
         with:
           name: repo-list
